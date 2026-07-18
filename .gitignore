@@ -1,0 +1,42 @@
+node_modules/
+dist/
+.turbo/
+*.log
+.DS_Store
+.pnpm-store/
+.harness/state/.cache/
+# coordinator 互斥锁：单会话运行时态，不共享入库（见 .harness/scripts/lib/lock.ts）
+.harness/state/coordinator-lock.json
+# module-coordinator dual-write 记账（coord-service claim id 缓存，非权威，见
+# .harness/scripts/lib/module-lock-state.ts）
+.harness/state/module-lock-*.json
+
+# Next.js / 全栈骨架
+.next/
+# 构建损坏时把 .next 改名保留的现场（`.next.corrupt-<ts>/`）——`.next/` 盖不住它，
+# 曾有一坨 117MB 的残骸在主 checkout 里躺了几天没人认领
+.next.corrupt-*/
+*.tsbuildinfo
+
+# 本地环境与运行时态（派生，不入库）
+.env
+.env.local
+**/.memory/
+
+# Cloudflare 部署凭据（packages/coord-service）——只提交 .env.cloudflare.example
+**/.env.cloudflare
+.wrangler/
+
+# 脚本派生的只读视图（由 new-sprint/claim 重生成，不入库；权威源是 feature_list.json）
+**/active-features.json
+
+# 旧系统代码：仅作实现参考，不入库（3 个完整旧代码库，5000+ 文件/含二进制）
+phases/requirements/oldcode/
+# Playwright 失败产物
+**/test-results/
+**/playwright-report/
+.claude/worktrees/
+.worktrees/
+
+# evidence 日志必须入库（AGENTS.md 完成定义：没有证据 = 没有完成）
+!phases/**/evidence/*.log

@@ -1,0 +1,96 @@
+# harness-verify.yml — CI 门控
+# 快速迭代策略（2026-07）：
+#   - PR/push 只做轻量门控：受影响模块的 typecheck/lint/test（turbo --affected）+ 生成物漂移检查。
+#   - 全栈烟测(fullstack-smoke)：每小时检查 main 是否有新合并的 PR，有才跑一次。
+#   - 全量浏览器 e2e(e2e-full)：每 3 小时定时回归一次。
+#   - harness verify / 完整验证由本地开发流程承担（pnpm harness verify、verify:full）。
+
+name: harness-verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # 每小时检查 main 是否有新合并（新 PR 落地即产生新 commit），有则跑全栈烟测。
+    - cron: "0 * * * *"
+    # 全量浏览器 e2e 每 3 小时跑一次。
+    - cron: "30 */3 * * *"
+  # 手动触发 e2e-full（#665）：它此前只在 `30 */3` 那个 cron 跑，改动它的人要等最多
+  # 3 小时才知道结果，验证成本高到没人验证——这正是它连红 12 次无人察觉的一环。
+  workflow_dispatch:
+    inputs:
+      run_e2e_full:
+        description: "跑全量浏览器 e2e（e2e-full）"
+        type: boolean
+        default: true
+
+jobs:
+  verify:
+    # 轻量门控：每个 PR/push 都跑，只测受本次改动影响的模块；定时(daily)不重复跑。
+    # 也排除 workflow_dispatch：dispatch 是专门用来手动跑 e2e-full 的，payload 里没有
+    # `before` 字段 → TURBO_SCM_BASE 会解析成空串 → `turbo --affected` 基线为空。
+    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # --affected 需要能 diff 到 base 分支
+          fetch-depth: 0
+
+      # 不指定 version：pnpm/action-setup 从 package.json 的 packageManager 字段
+      # (pnpm@9.0.0) 读取。两处都写会触发 ERR_PNPM_BAD_PM_VERSION。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node (read .nvmrc)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Subagent 生成物未漂移
+        run: |
+          pnpm harness gen-subagents
+          git diff --exit-code .claude/agents .codex/agents \
+            || (echo "✗ subagent 生成物与 .harness/agents/*.yaml 不一致：改了 yaml 请重新跑 pnpm harness gen-subagents 并提交" && exit 1)
+
+      # 只跑受本次改动影响的包（模块只测自己）。
+      # PR：相对 base 分支；push main：相对上一个 commit。
+      - name: 受影响模块 typecheck/lint/test
+        env:
+          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: pnpm turbo run typecheck lint test --affected
+
+  # 每小时的门卫：看 main 在过去 1 小时内是否有新 commit（新 PR 合并即产生）。
+  # 有 → 触发 fullstack-smoke；没有 → 本小时静默跳过，不浪费 runner。
+  check-new-merges:
+    if: github.event_name == 'schedule' && github.event.schedule == '0 * * * *'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: main 过去 1 小时内是否有新 commit
+        id: check
+        run: |
+          head_ts=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          if [ $((now - head_ts)) -lt 3600 ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "✓ main 有新合并（HEAD 距今 $((now - head_ts))s），触发全栈烟测"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "○ main 过去 1 小时无新合并，跳过"
+          fi
+
+  # 全栈运行时回归：pg/redis 服务 + curl 断言，真测运行时行为。
+  # 不随每个 PR/push 跑；每小时定时检查，main 有新合并才执行。
+  # fullstack-smoke（应用级冒烟）在模板中省略——它必然依赖你的具体应用栈
+  # （数据库/端口/首页断言）。参考模式：起最小服务 → curl 首页断言关键字 →
+  # 失败上传日志 artifact。BoardX 的完整实例见上游仓 harness-verify.yml。

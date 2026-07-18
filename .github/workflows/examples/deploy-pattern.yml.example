@@ -1,0 +1,31 @@
+# deploy-pattern.yml.example — CD 模式样例（改名去掉 .example 前先填占位符）
+# 三条上游用真实事故换来的规则，缺一不可：
+#   1. 唯一部署入口 = 合并到 main 后从 main 部署（手动部署会 last-write-wins 互相覆盖）
+#   2. 迁移先于部署（新代码可能引用新表；迁移必须幂等）
+#   3. 冒烟带**部署漂移探针**：断言关键端点存在性（如 POST /x 无 token 应 401 而非
+#      404）——"线上落后于 main"要当场红，不靠人肉发现
+name: deploy-<target>
+on:
+  push:
+    branches: [main]
+    paths: ["<触发路径>/**"]
+  workflow_dispatch: {}
+concurrency:
+  group: deploy-<target>
+  cancel-in-progress: false   # 迁移+部署非原子，禁止中途取消，排队执行
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 门控（碰生产前先过测试）
+        run: <typecheck + test>
+      - name: 迁移（幂等，必须先于部署）
+        run: <migrations apply>
+      - name: 部署（只从 main）
+        run: <deploy 命令>
+      - name: 冒烟 + 漂移探针
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -m 20 <关键端点>)
+          [ "$code" = "<预期码>" ] || { echo "::error::drift?"; exit 1; }

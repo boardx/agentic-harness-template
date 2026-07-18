@@ -1,0 +1,4 @@
+# roadmap.yaml — 所有阶段(phase=项目)的单一来源。
+# new-phase 会往这里追加条目；状态由 sync/doctor 维护，禁止手改 passing 计数。
+version: 1
+phases: []

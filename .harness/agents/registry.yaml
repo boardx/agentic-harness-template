@@ -1,0 +1,42 @@
+# registry.yaml — agent/开发者身份注册表（协调层的授权与归属唯一依据）
+# 每个身份：id 唯一；kind 决定权力（coordinator 层可派工/合并，worker 只干活）；
+# owner 是人类邮箱（门户按它做"人类身份映射"）。改动走 PR review。
+version: 1
+
+developers:
+  # - email: you@example.com
+  #   github: your-login
+  #   role: maintainer
+
+agents:
+  # ── 主协调者（唯一，合并权归它）─────────────────────────────
+  - id: coord-main
+    active: true
+    kind: coordinator
+    model: <你计划使用的模型>
+    areas: ["*"]
+    responsibilities:
+      - 全队编排/merge 队列/review 门禁（SOP 见 coordinator-sop.md）
+
+  # ── 模块协调者示例（按模块清单增删；无合并权，PR 全绿后转交 coord-main）──
+  # - id: coord-<模块名>
+  #   active: true
+  #   kind: module-coordinator
+  #   owner: you@example.com
+  #   areas: [<模块名>]
+  #   reports_to: coord-main
+
+  # ── 开发 agent 示例 ──────────────────────────────────────────
+  # - id: dev-<模块名>
+  #   active: true
+  #   kind: worker
+  #   owner: you@example.com
+  #   areas: [<模块名>]
+
+reviewers:
+  # 必需 reviewer 路由：required_for 含 "*" 或与 issue 的 area 相交 → 必须出 verdict
+  # - id: rev-feature
+  #   active: true
+  #   kind: reviewer
+  #   required_for: ["*"]
+  #   emits: review:feature-ok
