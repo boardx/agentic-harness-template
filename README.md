@@ -53,6 +53,10 @@ pnpm harness verify --sprint 01/01        # 唯一的完成之门
 | 控制 | `.harness/` | 指令/模板/量规/脚本/状态——harness 大脑 |
 | 交付 | `phases/` | 阶段 → sprint → feature 时间线 |
 
+技术架构方案：参考栈（分层选型+可替换点+部署三形态）见
+`.harness/instructions/architecture.md`；组织本体/知识图谱数据架构（PG canonical +
+pgvector + Apache AGE 图投影，graph-first 检索）见 `docs/architecture/knowledge-ontology.md`。
+
 入口永远是 `AGENTS.md`（≤100 行目录页，agent 每次开工第一个读的文件）。
 
 ## 与上游的关系

@@ -1,55 +1,47 @@
-# 系统 agentic 架构总览
+# 参考技术架构（reference stack）
 
-> 渐进式披露第 3 层。被构建系统(产品)本身是一个智能体系统;本文件描述它的运行时架构。
-> 这是「代码平面」的设计契约,`apps/` 与 `packages/` 的实现必须与此一致。
+> 渐进式披露第 3 层。这是模板推荐的**参考栈**——每层给出默认选型 + 选型理由 +
+> 可替换点。硬约束只有一条（上游用真实需求换来的）：**架构必须可移植**——
+> 同一套代码要能部署到不同云平台与私有环境，禁止把业务逻辑绑死在单一云的专有原语上。
+> 组织本体/知识图谱的数据架构单独成篇：`docs/architecture/knowledge-ontology.md`。
 
-## BoardX 产品数据模型（已建，权威，2026-06-30）
+## 分层总表
 
-当前实际落地的全栈产品（`apps/web` + `packages/data`，显式 pg + SQL，不用 ORM）。
-实体关系（均经 `packages/data/migrations/*.sql` 演进，仓储函数在 `packages/data/src/*.ts`）：
+| 层 | 默认选型 | 为什么 | 可替换点 |
+|---|---|---|---|
+| 前端 | Next.js（App Router）+ Tailwind + shadcn/ui | SSR/RSC 与 API 同进程共享 session；组件可控 | 任意 SPA 框架，但保留「设计单源门控」模式（见下） |
+| 后台 | Next.js API routes + **三层中间件**（Guard/Pipe/ErrorBoundary） | 纯函数 + Web 标准 Request/Response，Node 与 edge runtime 都能跑，零运行时分裂 | 换重框架（NestJS 等）的触发条件见上游案例：开放第三方 API / 强制模块边界 / 重型编排，三条有一再换 |
+| AI | **gateway 抽象层**（provider 可插拔）+ sanctioned stub | 模型/供应商必然更换，业务代码只依赖 gateway 接口；e2e 必须能在无真实 API key 时确定性通过 | 任意 provider（Anthropic/OpenAI/Qwen/本地模型），一个适配器一个文件 |
+| 数据库 | PostgreSQL = canonical + **显式 SQL 迁移**（不用 ORM 魔法） | 单一事实源；迁移可读可审计；pgvector/AGE 扩展同库承载向量与图（免运维第二套存储） | 任意托管 PG / 自托管；迁移 runner 可换但迁移文件必须显式 SQL |
+| 实时同步 | WebSocket + 服务端权威状态；协作编辑用 CRDT（如 Yjs） | 客户端断线重连/多端一致是常态不是异常 | 单机=自托管 ws 进程；边缘=Durable Object；**协议不变，载体可换**（协调协议 coord/0.1 就是这个原则的实例） |
+| 图/本体 | Postgres + pgvector + **Apache AGE**（图投影可重建） | 见 knowledge-ontology.md——canonical 永远是关系表，图是投影 | 图查询层可换（Neo4j 等），但 canonical 在 PG 这条不变 |
+| 对象存储 | S3 兼容接口（MinIO 自托管 / 云 S3） | 接口标准化，多云/私有随意切 | 任意 S3 兼容实现 |
+| 缓存/队列 | Redis **仅运行时**（可丢失不可作为事实源） | 事实只在 PG；Redis 挂了系统降级不损数据 | 任意兼容实现，或小规模直接不用 |
 
-```
-users ──< team_members >── teams
-  │                          │
-  └──< rooms (owner/team) ──< room_members
-            │
-            ├──< boards (room 内多个白板; visibility room|team|public)        [P5]
-            │       ├──< board_items (画布内容; 见 ADR-0002 board-keyed 过渡)  [P6]
-            │       ├──< board_favorites / board_visits                        [P5]
-            │       └── settings jsonb (交互偏好)                              [P7]
-            └──< room_chats (房间内 AVA 聊天线程; 消息体待 p9)                 [P4]
-```
+## 部署三形态（同一套代码）
 
-**数据层硬约定（实现必须遵守）**：
-- **schema 只经 migrations 改**；app 不散写 SQL，统一走 `packages/data` 仓储函数。
-- **pg `bigint`(int8) 返回值是字符串**，不是 number。跨类型比较（如 `chat.room_id !== Number(params.id)`）
-  会恒真致 bug——比较前用 `Number()` 或 `String()` 统一。同为 bigint 的字段间 `===` 安全（都是字符串）。
-- 权限判定优先走 SQL（`canViewRoom`/`canViewBoard`/`getBoardAccessRole` 等仓储函数），不在 app 层散判。
-- 新增能力按 CAP 平面归类（CAP-WEB/DATA/AUTH/CANVAS/COLLAB/AI…），feature 带 `capability` 字段。
+1. **单机私有**：docker compose（PG+MinIO+Redis）+ systemd 托管应用进程 + Caddy TLS。
+2. **多云容器**：任意 k8s / 容器服务，镜像同一份。
+3. **边缘混合**：静态/门户走边缘平台（Cloudflare Pages 等），有状态服务留守可移植层。
+   边缘上的代码必须是纯 Web 标准（这正是后台选三层中间件而非重框架的原因）。
 
-**API/UI 约定**：API 路由在 `apps/web/app/api/**/route.ts`（`currentUser()` 鉴权，401/403/404 语义一致）；
-页面在 `apps/web/app/(app)/**`，必须实现 loading/empty/error 三态、禁原生 `<button>`（用 `@/components/ui/*`），
-过 `apps/web/scripts/lint-design.sh` 门控（见 `uiux-standards.md`）。
+规则：**有 CD 的目标不手动部署**；迁移先于部署且幂等；冒烟带漂移探针
+（模式见 `.github/workflows/examples/deploy-pattern.yml.example`）。
 
-> 下方「智能体编排架构」是 CAP-AI 的**规划态**（apps/orchestrator / packages/agent-core / tools 尚未建），
-> 待 p9 AVA 阶段落地。当前 `packages/memory` 已存在（三层+wikilink），演进为 Personal Ontology。
+## 三个必须建立的机械门控（上游血泪，缺一层就等出事）
 
-## 平面划分（CAP-AI 规划态，未建）
-- `apps/orchestrator`:智能体编排器,负责接收任务、规划、调度子能力、汇总结果。
-- `packages/agent-core`:智能体内核——推理循环(plan→act→observe)、会话与回合管理。
-- `packages/tools`:工具子系统,按最小权限暴露能力(shell、检索、外部 API 适配)。
-- `packages/memory`:状态与记忆——短期工作记忆、长期持久化、跨会话恢复。
+1. **鉴权层**：`withAuth` 包裹所有需登录路由——handler 拿到非空 user，不再手写 401。
+2. **校验层**：`withValidation(zod)`——校验层"根本不存在"是最常见的静默缺陷
+   （上游实测 152 路由 0 校验库）。
+3. **错误边界**：意外错误只回 `internal_error`，细节只进日志；**lint 门控**响应体里的
+   `String(err)`/`err.message`（上游肉眼估 3 处泄漏，机器一扫 51 处）。
 
-## 数据流(高层)
-任务 → orchestrator 规划 → agent-core 推理循环 → 经 tools 执行动作 →
-observation 回灌 → memory 记录 → 直到达成验证标准 → 汇总交付。
+同理前端：**设计 token 单源**（字号/色彩比例尺一个文件定义）+ lint 拦超出比例尺的
+硬编码值。原则：**能机器判定的一致性，绝不交给人肉抽查**。
 
-## 不变量(实现必须遵守)
-- 工具调用最小权限,默认拒绝;新增能力需在 `agentic-patterns.md` 登记。
-- 任何跨会话状态都落 `memory`,不依赖进程内内存。
-- 推理循环每一步可观测(见 `observability.md`),便于事后归因。
+## 不变量（实现必须遵守）
 
-## 与 ADR 的关系
-重大架构选择(编排模型、记忆后端、工具协议等)必须落 `docs/adr/`,并在此处链接。
-- `docs/adr/0001-record-architecture-decisions.md` — 采用 ADR 实践。
-- `docs/adr/0002-board-keyed-items.md` — 画布 item 从 room-keyed 演进为 board-keyed（加法过渡）。
+- 仓库即唯一事实来源；所有状态可从 PG + 迁移重建。
+- 任何"看起来能跑"都不算数：feature 完成 = verification 命令退出码 0 + 证据落盘。
+- 多 agent 并行时的资源互斥走协调协议（`docs/coordination-protocol.md`），
+  禁止各自发明锁。

@@ -56,7 +56,7 @@
 - 没有半成品处于未记录状态;下一轮无需人工修复即可继续。
 
 ## 按需深入(渐进式披露,需要时才读)
-- 系统架构总览 → `.harness/instructions/architecture.md`
+- 参考技术架构（前端/后台/AI/DB/实时同步）→ `.harness/instructions/architecture.md`；组织本体/知识图谱 → `docs/architecture/knowledge-ontology.md`
 - 智能体编排/工具/记忆约定 → `.harness/instructions/agentic-patterns.md`
 - 多 agent 协调（主 agent + issue-label 状态机 + review 门禁）→ `.harness/instructions/multi-agent-coordination.md`（见 ADR-004）
 - **新 agent 接入执行书（第一次进来照它走）** → `.harness/instructions/agent-bootstrap.md`；背后的规则清单 → `agent-onboarding-checklist.md`（见 ADR-005）
