@@ -82,7 +82,101 @@ skill。被推翻的旧经验标删除线不删除（错误的历史也是知识
 并链到取代者——决策的演化史和决策本身一样有价值。本模板的 ADR 分两层：方法论
 （<100 号，随模板走）和项目实现（你自己的，从 ADR-100 起）。
 
-## 三、最佳实践（工作流层面的操作指南）
+## 三、四大支柱（概念如何落成体系）
+
+上面的概念不是清单，是四个相互咬合的体系。每个支柱这里给全景，细节在指向的文档里。
+
+### 支柱 1：技术架构（详见 `.harness/instructions/architecture.md`）
+
+一条硬约束统领全部选型：**架构可移植**——同一套代码部署到任意云与私有环境，
+业务逻辑不绑单一云的专有原语。在此之下是 8 层参考栈（每层：默认选型/为什么/可替换点）：
+
+```
+前端  Next.js + 设计token单源+lint门控     实时同步  WS + 服务端权威 + CRDT（协议不变载体可换）
+后台  三层中间件 Guard/Pipe/ErrorBoundary   图/本体   PG canonical + pgvector + AGE 可重建投影
+AI    gateway 抽象 + sanctioned stub        对象存储  S3 兼容接口
+数据  PostgreSQL + 显式 SQL 迁移            缓存队列  Redis 仅运行时（可丢失）
+```
+
+三个纪律贯穿所有层：
+- **canonical 只有一个**（PG）——向量、图、缓存全是可重建投影，灾备 = 重放迁移+重建投影。
+- **三层机械门控是标配不是可选**：鉴权（withAuth）/ 校验（withValidation）/ 错误边界
+  （意外错误只回 internal_error）。缺哪层，哪层就是下一个事故。
+- **部署三形态同一套代码**：单机私有（compose+systemd+Caddy）/ 多云容器 / 边缘混合
+  （边缘代码必须纯 Web 标准——这决定了后台不用重框架）。
+- 组织本体/知识图谱的完整数据架构 → `docs/architecture/knowledge-ontology.md`
+  （四表 canonical、ontology_actions 唯一写入口、graph-first 检索）。
+
+### 支柱 2：Harness 过程（详见 `.harness/instructions/harness 各标准 + AGENTS.md`）
+
+harness 是控制平面：管理"工作如何被定义、执行、验证、审计"。核心是一条**不可绕过
+的状态机**：
+
+```
+原始需求 ──requirement-author──▶ feature_list.json（唯一权威）
+                                     │ new-sprint 派生只读工作集
+                                     ▼
+              not_started ─▶ in_progress ─▶ passing（不可逆）
+                                     ▲            ▲
+                        一次只做一个（脚本断言）   │
+                                     只有 verify 能翻（证据落盘）
+                                                  │
+                              doctor 独立体检证据链（防假 passing）
+```
+
+关键机制：
+- **feature 三元组**：user_visible_behavior（人话说清行为）+ verification（可执行
+  命令，先于实现写下）+ evidence（verify 自动写入）。三者缺一不是 feature。
+- **verify 与 doctor 分离**：翻状态的门和查门的人是两套代码，不能互相背书。
+- **会话生命周期**：开工读 progress/handoff/active-features → 干活 → 收尾过
+  clean-state 清单 + 写 handoff。上下文蒸发被仓库文件接住。
+- **多 agent 时**：registry.yaml 定身份与权力，租约管互斥，tick 管对时与收件箱，
+  协议契约见 `docs/coordination-protocol.md`。单 agent 时这些全部可以不配。
+
+### 支柱 3：Sprint 管理（详见 `.harness/templates/` + sprint-planner skill）
+
+交付平面三级：**phase（阶段=项目）→ sprint → feature**。
+
+- **phase**：`new-phase` scaffold 出 requirements/ 文件夹；原始需求（大白话/用户
+  故事）先进文件夹，再由 requirement-author 转成带可执行验证的 feature_list。
+  **requirements 是输入不是权威**——权威永远是 feature_list.json。
+- **UI 先行关卡**（仅 has_ui 阶段）：feature 清单定稿前，先用真实组件+mock 数据把
+  界面做出来经**人类**确认（ui-signoff.md）；未确认 new-sprint 直接拒绝。
+- **sprint**：`new-sprint` 从 feature_list 圈一批 feature，派生只读 active-features
+  视图（禁止手改）。sprint 内纪律：每 owner 同时只有一个 in_progress；范围只及
+  当前 feature；`verify --sprint` 是唯一收口。
+- **进度可见**：progress.md（人读）与 roadmap/PROGRESS（机器派生）分离；
+  doctor 检测两者漂移。
+- **节奏**：sprint 不定长，以 feature 批次为界；每轮会话收尾 = 一次微交接；
+  周期性复盘由协调层的 C-cycle 承担（报告与运营 loop 分离，见 ADR-014）。
+
+### 支柱 4：DevOps 架构流程（详见 `.github/workflows/` + examples/）
+
+CI 与 CD 是两条独立防线，共享一个原则：**响亮失败，绝不静默**。
+
+**CI（harness-verify.yml）**——每次 push/PR：
+1. 生成物防漂移（gen-subagents 后 git diff 必须干净——生成物与源不一致当场红）；
+2. `turbo --affected` 只测受影响的包（模块只为自己的改动买单，CI 时长不随仓库
+   规模线性膨胀）；
+3. 全栈冒烟不随每个 PR 跑——每小时门卫检查 main 有无新合并，有才跑（省 runner
+   不省覆盖）。
+
+**CD（examples/deploy-pattern.yml.example）**——合并 main 触发，四步固定顺序：
+```
+门控（typecheck+test）→ 迁移（幂等，先于部署）→ 部署（只从 main）→ 冒烟+漂移探针
+```
+- **唯一部署入口 = 合并 main**。禁手动部署：两个分支各自手动 deploy 会
+  last-write-wins 互相覆盖（上游真实事故：线上功能静默消失一天半）。
+- **串行不取消**（concurrency cancel-in-progress: false）：迁移+部署非原子，
+  中途取消会留半套。
+- **漂移探针**：冒烟断言关键端点存在性（POST /x 无凭据应 401 而非 404）——
+  "线上落后于 main"要 CI 当场红，不靠人肉发现。
+- **env/secret 与部署原子**：同 PR 或先加后删；"先删等下次部署补"的窗口必然被
+  自动部署踩中。
+- 凭据三分法：本地 = gitignore 的 `.harness/state/.cache/`；CI = repo secrets；
+  运行时 = 平台 secret 注入。任何一处都不进 git/聊天/issue，引用时只给路径。
+
+## 四、最佳实践（工作流层面的操作指南）
 
 ### 开发节奏
 - **一次只做一个 feature**。范围纪律：只动当前 feature 涉及的代码，不顺手重构。
@@ -116,11 +210,12 @@ skill。被推翻的旧经验标删除线不删除（错误的历史也是知识
 问三个问题：① 这条规则防的事故真实发生过吗？② 能不能机器判定？③ 违反时的
 失败是响亮的还是静默的？三问都及格再进标准；否则先当提案放 `docs/proposals/`。
 
-## 四、如何读这套模板
+## 五、如何读这套模板
 
 按角色给路径：
 - **只想快速上手** → README「十分钟接入」，遇到不明白的再回本文。
 - **要给团队引入** → 本文全文 + `docs/adr/` 十份方法论 ADR（每份都短）。
+- **只关心某一支柱** → 第三章按支柱给了全景与细节文档索引，可单独跳读。
 - **要接多 agent 并行** → `docs/coordination-protocol.md` + ADR-010/014。
 - **要改模板本身** → 先读 `docs/README.md` 的分层规则，改动走 PR。
 
