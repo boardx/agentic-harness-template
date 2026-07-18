@@ -68,6 +68,7 @@
 - 端到端验证标准 → `.harness/instructions/testing-standards.md`
 - 可观测性约定 → `.harness/instructions/observability.md`
 - 阶段/局部规则 → 对应 `apps/*/AGENTS.md`、`phases/<phase>/AGENTS.md`
+- 模板的思想与最佳实践（为什么是这样）→ `docs/CONCEPTS.md`
 - 文档该放哪一层（标准/ADR/档案）→ `docs/README.md`；项目专属事实单点 → `.harness/instructions/project/PROJECT.md`
 
 ## 需求录入流水线（新阶段开工前）

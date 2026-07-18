@@ -15,6 +15,9 @@
 | **提案档案** | `docs/proposals/` | 已被 ADR/标准吸收或搁置的 proposal 原文 | ❌ |
 | **事故复盘** | `docs/postmortems/` | postmortem 全文（结论应已回流到标准/ADR/skill） | ❌ |
 
+例外：`docs/CONCEPTS.md`（思想导读）与 `docs/coordination-protocol.md`（协议契约）
+是**现行标准**放在 docs/ 的两个例外——它们面向模板使用者而非日常开工路径。
+
 ## 判据一句话版
 - 「照着做」→ instructions/；「为什么」→ adr/；「当时怎么想的」→ proposals/、design/；
   「烧过什么」→ postmortems/。

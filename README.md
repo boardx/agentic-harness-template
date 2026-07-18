@@ -29,6 +29,8 @@ Docs are primarily in Chinese; the structure is language-neutral. Start below.
 
 每条规则背后都有上游真实事故或收益，ADR（`docs/adr/`）保留了完整出处。
 
+**想先懂思想再上手**：[docs/CONCEPTS.md](docs/CONCEPTS.md)——四种失效模式、11 个基础概念、最佳实践与阅读路径。
+
 ## 十分钟接入
 
 ```bash
