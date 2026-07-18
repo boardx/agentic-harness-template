@@ -5,7 +5,7 @@ set -euo pipefail
 
 INSTALL_CMD="pnpm install"
 VERIFY_CMD="pnpm -w run verify:base"   # 基础验证:类型检查 + lint + 单测
-START_CMD="pnpm -w run dev"
+START_CMD=""   # 模板无应用层；接入你的 app 后改成真实启动命令（如 pnpm -w run dev）
 
 echo "==> 工作目录: $(pwd)"
 
@@ -178,8 +178,15 @@ if ! eval "${VERIFY_CMD}"; then
   exit 1
 fi
 
-echo "==> 启动命令: ${START_CMD}"
-if [ "${RUN_START_COMMAND:-0}" = "1" ]; then
-  echo "==> RUN_START_COMMAND=1,直接启动"
-  eval "${START_CMD}"
+if [ -n "${START_CMD}" ]; then
+  echo "==> 启动命令: ${START_CMD}"
+  if [ "${RUN_START_COMMAND:-0}" = "1" ]; then
+    echo "==> RUN_START_COMMAND=1,直接启动"
+    eval "${START_CMD}"
+  fi
+else
+  echo "==> 基础验证通过。下一步（README『十分钟接入』）："
+  echo "    1. 填 .harness/instructions/project/PROJECT.md 与 .harness/config/github-sync.yaml"
+  echo "    2. pnpm harness new-phase --id 01 --name <名字> --goal \"<目标>\""
+  echo "    3. 把原始需求写进 phases/phase-01-*/requirements/ 后让 agent 读 AGENTS.md 开工"
 fi
