@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@repo/coord-protocol':
+        specifier: workspace:*
+        version: link:packages/coord-protocol
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
