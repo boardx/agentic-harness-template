@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildIssueBody } from "./sync-github";
+import { PHASES_DIR } from "./lib/paths";
 import type { Feature, FeatureList } from "./lib/types";
+
+// findPhaseDir("p27") 需要真实存在的 phases/phase-p27-*/ 目录（模板仓的 phases/
+// 默认为空，不像来源仓那样带着 p27 真实阶段）——建一次性 fixture，测完即清。
+const PHASE_DIR = join(PHASES_DIR, "phase-p27-fixture");
+beforeEach(() => mkdirSync(PHASE_DIR, { recursive: true }));
+afterEach(() => rmSync(PHASE_DIR, { recursive: true, force: true }));
 
 describe("buildIssueBody", () => {
   it("links p27 feature issues to parent issue 662", () => {
