@@ -75,6 +75,7 @@
 - 阶段/局部规则 → 对应 `apps/*/AGENTS.md`、`phases/<phase>/AGENTS.md`
 - 模板的思想与最佳实践（为什么是这样）→ `docs/CONCEPTS.md`
 - 文档该放哪一层（标准/ADR/档案）→ `docs/README.md`；项目专属事实单点 → `.harness/instructions/project/PROJECT.md`
+- **Claude Code + Codex 双工具支持**：规格只写一次（`.harness/agents/*.yaml`），`pnpm harness gen-subagents` 生成两种格式，行为不漂移（CI 门控）
 
 ## 需求录入流水线（新阶段开工前）
 原始需求 → 智能体 → 权威功能清单：
