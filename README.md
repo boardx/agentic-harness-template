@@ -61,6 +61,24 @@ pgvector + Apache AGE 图投影，graph-first 检索）见 `docs/architecture/kn
 
 入口永远是 `AGENTS.md`（≤100 行目录页，agent 每次开工第一个读的文件）。
 
+## 双工具支持：Claude Code + Codex
+
+模板同时支持 **Claude Code** 和 **OpenAI Codex** 作为执行 agent 的 CLI 工具，规格只写
+一次：
+
+- 角色/审查类 subagent（code-reviewer / e2e-verifier / feature-evaluator 等）的规格
+  写在 `.harness/agents/*.yaml`（工具无关的中立描述：`role`/`tools`/`system_prompt`/
+  `model: {claude, codex}` 每工具可各自指定模型）。
+- `pnpm harness gen-subagents` 从同一份 yaml 生成两种格式：
+  - `.claude/agents/<name>.md`（YAML frontmatter + system prompt，Claude Code 原生格式）
+  - `.codex/agents/<name>.toml`（Codex 原生格式）
+- **两份生成物都入库**，CI 有漂移检查（改了 yaml 忘记重新生成 = 直接红）：改 spec 后
+  记得重跑 `pnpm harness gen-subagents` 再提交。
+- 长驻角色（coordinator / module-coordinator / worker，见 `.harness/agents/registry.yaml`）
+  同样工具无关：`agent-bootstrap.md`/`coordinator-sop.md` 等执行书不绑定任何一个
+  CLI 工具的语法，`pnpm harness tick`/`claim`/`verify` 等命令两边通用（都是纯 shell +
+  Node 脚本，不依赖某个工具的专有能力）。
+
 ## 与上游的关系
 
 方法论层持续从 BoardX 上游单向同步（ADR 编号 <100 为上游方法论，你的项目从
