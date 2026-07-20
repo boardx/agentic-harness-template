@@ -22,9 +22,10 @@ description: >
 
 ### Step 1 — 唯一性握手（防双 coordinator）
 
-**2026-07-08 起（ADR-009）**：唯一性由 coord-service (D1) 裁定，需要
+**唯一性由协调服务裁定**（协议契约见 `docs/coordination-protocol.md`），需要
 `COORD_SERVICE_URL`/`COORD_SERVICE_TOKEN` 凭据（没有就先找人类领取，无凭据无法
-担任 coordinator）：
+担任 coordinator；未接入协调服务时不能当 coordinator——这个角色的存在意义就是
+跨会话唯一性，没有权威裁定就没有唯一性可言）：
 ```bash
 pnpm harness lock-status                      # 权威状态：谁持有、心跳多久前
 pnpm harness lock-acquire --session <会话标识>  # 原子认领（被占且新鲜会被拒绝）
@@ -67,8 +68,8 @@ gh pr list --state open --json number,statusCheckRollup  # CI 与 review 缺口
 合并独占、证据实测）任何时候不可违反。
 
 ## 退位（主动交接）
-1. `pnpm harness lock-release --session <会话标识>` 释放 D1 租约；交接要点
-   （在途 review、冻结原因、未派任务）写进总线叙述 issue，**状态写 D1 + 叙述写
+1. `pnpm harness lock-release --session <会话标识>` 释放协调服务租约；交接要点
+   （在途 review、冻结原因、未派任务）写进总线叙述 issue，**状态写协调服务 + 叙述写
    总线，不留会话记忆**。
 2. 停掉自己挂的监控。
 3. 未完成的协调动作降级为 issue 评论，供下任冷启动读取。
