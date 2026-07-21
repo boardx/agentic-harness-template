@@ -23,8 +23,10 @@
 ## 状态说明
 - ADR-004 已被专用协调服务取代（Superseded），保留因为它记录了"为什么 issue 总线
   会到极限"——多数项目会先走到这一步再演进。
-- 编号空洞（002 旧序列、006-009、013、015-017、020）是上游 BoardX 的**项目实现层** ADR，
-  未随模板分发；完整清单见上游仓 `docs/adr/`。
+- 编号空洞（002 旧序列、006-009、013、015-017、020、021）是上游 BoardX 的**项目实现层**
+  ADR，未随模板分发；完整清单见上游仓 `docs/adr/`。ADR-021（A2UI 生成式结构化界面）
+  的可移植决策原则（何时该上声明式生成式 UI 协议）已收进
+  `.harness/instructions/architecture.md` 的「生成式结构化界面」一节。
 
 ## 写新 ADR
 1. 复制 `.harness/templates/adr.template.md` 为 `docs/adr/ADR-1xx-<slug>.md`。
